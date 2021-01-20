@@ -1,0 +1,14 @@
+label=start;
+serial=Waiting for threshold;
+label=wet;
+serial=It's Wet;
+jumpThreshold=dry,wet;
+label=dry;
+serial=It's dry;
+serial=Pump on and wait 2 seconds;
+pump=1;
+wait=2000;
+pump=0;
+serial=Pump Off, Waiting 5 minutes;
+wait=300000;
+jump=start;
