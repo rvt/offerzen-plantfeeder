@@ -19,10 +19,14 @@ public:
         m_lastValue(0),
         m_maxThreshold(0),
         m_minThreshold(0),
-        m_currentValue(0) {
+        m_currentValue(1024) {
     }
 
     bool decide() {
+        // Protection against loose connections
+        if (m_currentValue > 1020) {
+            return false;
+        }
         // We come from < min to > max, we should add water
         if ( m_currentValue >= m_maxThreshold && m_lastValue <= m_minThreshold) {
             m_lastValue = m_currentValue;

@@ -107,7 +107,7 @@ int8_t scripting_handle() {
     if (strlen(scriptContextFileToLoad) != 0) {
         load_script();
         return 1;
-    } else if (scriptContext == nullptr) {
+    } else if (scriptContext == nullptr) { 
         return -1;
     } else if (scriptRunner->handle(*scriptContext)) {
         return 1;

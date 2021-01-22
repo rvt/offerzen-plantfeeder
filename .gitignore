@@ -1,0 +1,7 @@
+.pio/
+.vscode/
+tmp/
+src/*generated*
+build/
+.idea/
+.history/
