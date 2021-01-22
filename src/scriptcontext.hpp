@@ -13,13 +13,16 @@ public:
     uint16_t m_maxThreshold;
     uint16_t m_minThreshold;
     uint16_t m_currentValue;
+    bool m_watering;
     ScriptContext(const char* script) : 
         PlainTextContext512{script}, 
         m_pump(false), 
         m_lastValue(0),
         m_maxThreshold(0),
         m_minThreshold(0),
-        m_currentValue(1024) {
+        m_currentValue(1024),
+        m_watering(true)
+    {
     }
 
     bool decide() {
@@ -27,10 +30,15 @@ public:
         if (m_currentValue > 1020) {
             return false;
         }
-        // We come from < min to > max, we should add water
-        if ( m_currentValue >= m_maxThreshold && m_lastValue <= m_minThreshold) {
-            m_lastValue = m_currentValue;
+        // Set watering mode
+        if ( m_currentValue >= m_maxThreshold) {
+            m_watering=true;
             return true;
+        }
+        // remove watering mode
+        if ( m_currentValue <= m_maxThreshold && m_watering) {
+            m_watering=false;
+            return false;
         }
         // We come from > max to > max, we should add more water
         if ( m_currentValue >= m_maxThreshold && m_lastValue >= m_maxThreshold) {
