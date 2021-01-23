@@ -91,7 +91,7 @@ bool loadConfig(const char* filename, Properties& properties) {
                 Serial.print(F("Loading config : "));
                 Serial.println(filename);
                 deserializeProperties<LINE_BUFFER_SIZE>(configFile, properties);
-                serializeProperties<LINE_BUFFER_SIZE>(Serial, properties);
+                //serializeProperties<LINE_BUFFER_SIZE>(Serial, properties);
             }
 
             configFile.close();
@@ -106,30 +106,6 @@ bool loadConfig(const char* filename, Properties& properties) {
     }
 
     return ret;
-}
-
-/**
- * Store custom oarameter configuration in FileSystemFS
- */
-void handleScriptContext() {
-    if (scripting_context() != nullptr) {
-        scripting_context()->m_currentValue = analogRead(MOISTA_PIN);
-        scripting_context()->m_maxThreshold = (int16_t)hwConfig.get("maxThreshold");
-        scripting_context()->m_minThreshold = (int16_t)hwConfig.get("minThreshold");
-    }
-
-    int8_t handle = scripting_handle();
-
-    switch (handle) {
-        case 0:
-            digitalWrite(PUMP_PIN, false);
-            Serial.println("Script ended");
-            scripting_load("/default.txt");
-            break;
-    
-        case 1:
-            digitalWrite(PUMP_PIN, scripting_context()->m_pump);
-    }
 }
 
 /**
@@ -245,6 +221,32 @@ void setupMQTTCallback() {
 
 }
 
+
+///////////////////////////////////////////////////////////////////////////
+//  Handle script context
+///////////////////////////////////////////////////////////////////////////
+void handleScriptContext() {
+    if (scripting_context() != nullptr) {
+        scripting_context()->m_currentValue = analogRead(MOISTA_PIN);
+        scripting_context()->m_maxThreshold = (int16_t)hwConfig.get("maxThreshold");
+        scripting_context()->m_minThreshold = (int16_t)hwConfig.get("minThreshold");
+    }
+
+    int8_t handle = scripting_handle();
+
+    switch (handle) {
+        case 0:
+            digitalWrite(PUMP_PIN, false);
+            Serial.println("Script ended");
+            scripting_load("/default.txt");
+            break;
+    
+        case 1:
+            digitalWrite(PUMP_PIN, scripting_context()->pump());
+    }
+}
+
+
 ///////////////////////////////////////////////////////////////////////////
 //  IOHardware
 ///////////////////////////////////////////////////////////////////////////
@@ -334,7 +336,7 @@ void setDefaultConfigurations() {
     controllerConfigModified |= controllerConfig.putNotContains("mqttUsername", PV(""));
     controllerConfigModified |= controllerConfig.putNotContains("mqttPassword", PV(""));
     controllerConfigModified |= controllerConfig.putNotContains("mqttPort", PV(1883));
-    controllerConfigModified |= controllerConfig.putNotContains("statusJson", PV(true));
+    controllerConfigModified |= controllerConfig.putNotContains("pauseForOTA", PV(true));
 
     controllerConfig.put("mqttClientID", PV(mqttClientID));
     controllerConfig.put("mqttBaseTopic", PV(mqttBaseTopic));

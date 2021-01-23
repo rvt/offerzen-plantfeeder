@@ -8,6 +8,7 @@
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>  // https://github.com/esp8266/Arduino
 #include <ESP8266mDNS.h>
+#include <ArduinoOTA.h>
 
 /*********************
  *      EXTERNALS
@@ -35,11 +36,50 @@ static PubSubClient mqttClient(network_wifiClient);
 
 static bool network_hasMqttConfigured = false;
 
+/**
+ * Start OTA
+ */
+void startOTA() {
+    // Start OTA
+    ArduinoOTA.setHostname(controllerConfig.get("mqttClientID"));
+    ArduinoOTA.onStart([]() {
+        Serial.println(F("OTA Beginning"));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.print("ArduinoOTA Error[");
+        Serial.print(error);
+        Serial.print("]: ");
+
+        if (error == OTA_AUTH_ERROR) {
+            Serial.println(F("Auth Failed"));
+        } else if (error == OTA_BEGIN_ERROR) {
+            Serial.println(F("Begin Failed"));
+        } else if (error == OTA_CONNECT_ERROR) {
+            Serial.println(F("Connect Failed"));
+        } else if (error == OTA_RECEIVE_ERROR) {
+            Serial.println(F("Receive Failed"));
+        } else if (error == OTA_END_ERROR) {
+            Serial.println(F("End Failed"));
+        }
+    });
+    ArduinoOTA.begin();
+
+    if (controllerConfig.get("pauseForOTA")) {
+        uint16_t i = 0;
+
+        do {
+            delay(10);
+            ArduinoOTA.handle();
+            i++;
+        } while (i < 500); // 5 seconds
+    }
+}
 
 /**
  * Setup statemachine that will handle reconnection to mqtt after WIFI drops
  */
 void network_init() {
+    
     // Needed for ESP32, otherwhise crash
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
 
@@ -130,6 +170,7 @@ void network_init() {
     bootSequence->start();
     MDNS.begin(controllerConfig.get("mqttClientID"));
     MDNS.addService("http", "tcp", 80);
+    startOTA();
 }
 
 
@@ -159,6 +200,7 @@ void network_mqtt_callback(MQTT_CALLBACK_SIGNATURE) {
 }
 
 void network_handle() {
+    ArduinoOTA.handle();
     bootSequence->handle();
     mqttClient.loop();
 }
