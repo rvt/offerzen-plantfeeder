@@ -3,6 +3,7 @@
 #include "scripting.hpp"
 #include <scriptrunner.hpp>
 #include "scriptcontext.hpp"
+#include <propertyutils.hpp>
 
 #include <FS.h>
 #define FileSystemFS SPIFFS
@@ -11,7 +12,9 @@
 /*********************
  *      EXTERNALS
  *********************/
-
+extern Properties hwConfig;
+extern bool hwConfigModified;
+extern void deep_sleep(uint32_t time);
 
 /*********************
  *      Variables
@@ -28,6 +31,7 @@ void scripting_init() {
 
     commands.push_back(new Command<ScriptContext> {"serial", [](const OptValue & value, ScriptContext & context) {
         Serial.println((char*)value);
+        Serial.flush();
         return true;
     }
                                                         });
@@ -38,12 +42,21 @@ void scripting_init() {
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"waitThreshold", [&](const OptValue & value, ScriptContext & context) {
-        return context.decide();
+    commands.push_back(new Command<ScriptContext> {"decideDry", [&](const OptValue & value, ScriptContext & context) {
+        return context.requireMoreWater();
     }
-
                                                         });
-    commands.push_back(new Command<ScriptContext> {"jumpThreshold", [&](const OptValue & value, ScriptContext & context) {
+
+    commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const OptValue & value, ScriptContext & context) {
+        if (context.isBelowWet()) {
+                context.jump((char*)value);
+        }
+
+        return true;
+    }
+                                                        });
+
+    commands.push_back(new Command<ScriptContext> {"decideDryOrWet", [&](const OptValue & value, ScriptContext & context) {
         char buffer[16];
         strncpy(buffer, (char*)value, sizeof(buffer));
         const char* jmpLocationDry;
@@ -56,12 +69,19 @@ void scripting_init() {
             }
         });
 
-        context.jump(context.decide()?jmpLocationDry:jmpLocationWet);
+        context.jump(context.requireMoreWater()?jmpLocationDry:jmpLocationWet);
 
         return true;
     }
+                                                        });
 
-
+    commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const OptValue & value, ScriptContext & context) {
+        uint32_t time = (int32_t)atol((char*)value);
+        hwConfigModified = (bool)hwConfig.get("hysteresisLoop") != scriptContext->m_moreWaterRequired;
+        hwConfig.put("hysteresisLoop", PropertyValue(scriptContext->m_moreWaterRequired));
+        deep_sleep((int32_t)atol((char*)value) * 1000000);
+        return false;
+    }
                                                         });
 
     commands.push_back(new Command<ScriptContext> {"load", [&](const OptValue & value, ScriptContext & context) {
@@ -91,6 +111,7 @@ void load_script() {
         Serial.println(scriptContextFileToLoad);
         delete scriptContext;
         scriptContext = new ScriptContext{buffer};
+        scriptContext->m_moreWaterRequired = (bool)hwConfig.get("hysteresisLoop");
     } else {
         Serial.print(F("File not found: "));
         Serial.println(scriptContextFileToLoad);

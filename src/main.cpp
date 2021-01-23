@@ -20,7 +20,6 @@ extern "C" {
 #include <propertyutils.hpp>
 #include <optparser.hpp>
 #include <utils.h>
-#include <settings.h>
 
 #include <config.hpp>
 
@@ -63,20 +62,9 @@ bool hwConfigModified = false;
 uint16_t lastMeasurementCRC = 0;
 uint32_t shouldRestart = 0;        // Indicate that a service requested an restart. Set to millies() of current time and it will restart 5000ms later
 
-bool saveConfig(const char* filename, Properties& properties);
-
-Settings saveHwConfigHandler{
-    500,
-    10000,
-    []() {
-        saveConfig(CONFIG_FILENAME, hwConfig);
-        hwConfigModified = false;
-    },
-    []() {
-        return hwConfigModified;
-    }
-};
-
+///////////////////////////////////////////////////////////////////////////
+//  Loading/Saving of Properties
+///////////////////////////////////////////////////////////////////////////
 bool loadConfig(const char* filename, Properties& properties) {
     bool ret = false;
 
@@ -136,6 +124,21 @@ bool saveConfig(const char* filename, Properties& properties) {
     return ret;
 }
 
+void publishStatusToMqtt();
+void deep_sleep(uint32_t time_ms) {
+
+    if (hwConfigModified) {
+        saveConfig(CONFIG_FILENAME, hwConfig);
+    }
+    if (controllerConfigModified) {
+        saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig);
+    }
+    publishStatusToMqtt();
+    Serial.println("Good Night");
+    Serial.flush();
+    delay(100);
+    ESP.deepSleep(time_ms*1000);
+}
 
 ///////////////////////////////////////////////////////////////////////////
 //  MQTT
@@ -186,13 +189,21 @@ void handleCmd(const char* topic, const char* p_payload) {
         // If ON/OFF are used within the color topic
         OptParser::get(payloadBuffer, [&](OptValue v) {
             if (strcmp(v.key(), "min") == 0) {
-                hwConfig.put("minThreshold", PV((int16_t)v));
+                hwConfig.put("wetThreshold", PV((int16_t)v));
                 hwConfigModified=true;
             } else if (strcmp(v.key(), "max") == 0) {
-                hwConfig.put("maxThreshold", PV((int16_t)v));
+                hwConfig.put("dryThreshold", PV((int16_t)v));
                 hwConfigModified=true;
             }
         });
+    }
+
+    if (strstr(topicPos, "load") != nullptr) {
+        scripting_load(payloadBuffer);
+    }
+
+    if (strstr(topicPos, "sleep") != nullptr) {
+        deep_sleep(atol(payloadBuffer));
     }
 
     if (strstr(topicPos, "/reset") != nullptr) {
@@ -228,8 +239,8 @@ void setupMQTTCallback() {
 void handleScriptContext() {
     if (scripting_context() != nullptr) {
         scripting_context()->m_currentValue = analogRead(MOISTA_PIN);
-        scripting_context()->m_maxThreshold = (int16_t)hwConfig.get("maxThreshold");
-        scripting_context()->m_minThreshold = (int16_t)hwConfig.get("minThreshold");
+        scripting_context()->m_dryThreshold = (int16_t)hwConfig.get("dryThreshold");
+        scripting_context()->m_wetThreshold = (int16_t)hwConfig.get("wetThreshold");
     }
 
     int8_t handle = scripting_handle();
@@ -343,10 +354,10 @@ void setDefaultConfigurations() {
     controllerConfig.put("mqttLastWillTopic", PV(mqttLastWillTopic));
 
     // hwConfig
-    hwConfigModified |= hwConfig.putNotContains("maxThreshold", PV(800));
-    hwConfigModified |= hwConfig.putNotContains("minThreshold", PV(600));
+    hwConfigModified |= hwConfig.putNotContains("dryThreshold", PV(800));
+    hwConfigModified |= hwConfig.putNotContains("wetThreshold", PV(600));
+    hwConfigModified |= hwConfig.putNotContains("hysteresisLoop", PV(true));    
 }
-
 
 void setup() {
     // Enable serial port
@@ -399,7 +410,11 @@ void loop() {
         } else if (counter50TimesSec % maxSlots == slot50++) {
             handleScriptContext();
         } else if (counter50TimesSec % maxSlots == slot50++) {
-            saveHwConfigHandler.handle();
+            if (hwConfigModified) {
+                hwConfigModified = false;
+                saveConfig(CONFIG_FILENAME, hwConfig);
+            }
+
         } else if (counter50TimesSec % maxSlots == slot50++) {
             wm.process();
         } else if (counter50TimesSec % maxSlots == slot50++) {

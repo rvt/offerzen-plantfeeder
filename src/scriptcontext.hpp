@@ -8,30 +8,35 @@ typedef PlainTextContext<512> PlainTextContext512;
 class ScriptContext : public PlainTextContext512 {
 public:
     bool m_pump;
-    bool m_hysteresisLoop;
-    uint16_t m_maxThreshold;
-    uint16_t m_minThreshold;
+    bool m_moreWaterRequired;
+    uint16_t m_dryThreshold;
+    uint16_t m_wetThreshold;
     uint16_t m_currentValue;
     ScriptContext(const char* script) : 
         PlainTextContext512{script}, 
         m_pump(false),
-        m_hysteresisLoop(true),
-        m_maxThreshold(800),
-        m_minThreshold(500),
+        m_moreWaterRequired(true),
+        m_dryThreshold(800),
+        m_wetThreshold(500),
         m_currentValue(1024) {
     }
 
     /**
-    Decide if we need to give the pot a little bit of water or not
+    * Decide if we need to give the pot a little bit of water or not
+    * returns true if more water is required
     */
-    bool decide() {
-        if ( m_currentValue >= m_maxThreshold) {
-            m_hysteresisLoop=true;
-        } else if ( m_currentValue <= m_minThreshold) {
-            m_hysteresisLoop=false;
+    bool requireMoreWater() {
+        if ( m_currentValue >= m_dryThreshold) {
+            m_moreWaterRequired=true;
+        } else if ( m_currentValue <= m_wetThreshold) {
+            m_moreWaterRequired=false;
         }
-        return m_hysteresisLoop;
+        return m_moreWaterRequired;
     }
+
+    bool isBelowWet() {
+        return m_currentValue <= m_wetThreshold;
+    };
 
     bool pump() {
         return m_currentValue > 1020?false:m_pump;

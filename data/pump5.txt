@@ -1,0 +1,5 @@
+serial=Pump on and wait 5 seconds;
+pump=1;
+wait=5000;
+pump=0;
+load=/default.txt;
