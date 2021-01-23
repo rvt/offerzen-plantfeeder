@@ -6,44 +6,61 @@ wallDiamPot=2.4;
 // Diameter 
 diamGuide=12;
 // Distance between water holes
-waterHoleDistance=10;
+waterHoleDistance=9;
 // Offset of cubes
-offset=14;
+offset=15;
 //InnerTiameterTube;
 tubeInnerDiam=8;
-//
-sproudSize=1.8;
+// Size water holes
+sproudSize=1.6;
 
-$fn=60;
-
+$fn = $preview ? 12 : 72;
 
 difference() {
     union() {
-        pipe(length=outerDiamPot+15,i=diamGuide-3.2,o=diamGuide,cap=[2,2],cut=false);
+        pipe(length=outerDiamPot+offset,i=diamGuide-3.2,o=diamGuide,cap=[2,2],cut=false);
         rotate([0,90,0]) pipe(o=diamGuide,cap=[2,0],length=10,cut=false);
         translate([10,0,0]) rotate([0,90,0]) pipe(o=tubeInnerDiam,i=5,cap=[0,0],length=14,cut=false);
-        translate([diamGuide-2,0,offset+wallDiamPot/2]) cube([10,diamGuide,8],center=true);
-        translate([diamGuide-2,0,outerDiamPot+offset-wallDiamPot/2]) cube([10,diamGuide,8],center=true);
+        // Block to hold pot
+        blockOffset=offset-8/2;
+        translate([0,-diamGuide/2,blockOffset]) 
+            cube([15,diamGuide,8]);
+        translate([0,-diamGuide/2,outerDiamPot-wallDiamPot+blockOffset]) 
+            cube([15,diamGuide,8]);
     }
     union() {
         //translate([-250,0,-250]) cube([500,20,500]);
         pipe(length=outerDiamPot+15,i=diamGuide-4,o=diamGuide+1,cap=[2,2],cut=true);
         rotate([0,90,0]) pipe(cap=[2,0],i=6,o=10,length=10,cut=true);
-        
-        // Water Holes
-        for ( i = [1 : 8] ){
-            translate([0, 0, i*waterHoleDistance+offset+15])
-            rotate([90,0,0]) cylinder(d=sproudSize,h=20,center=true);
+       
+        // Water holdes
+        offsetToCenterHoles=(outerDiamPot-8*waterHoleDistance)/2;
+        translate([0,0,offset+offsetToCenterHoles]) {
+            mirror([0,1,0]) waterHoles();
+            waterHoles();
         }
         
         translate([diamGuide/2,0,offset]) potRing();
     }
 }
 
+module waterHoles() {
+    for ( i = [0 : 4] ){
+        color([0,1,0]) translate([0, 0, i*waterHoleDistance*2])
+        rotate([90,00,15]) cylinder(d=sproudSize,h=20);
+    }
+    for ( i = [0 : 3] ){
+        color([0,0,1]) translate([0, 0, i*waterHoleDistance*2+waterHoleDistance])
+        rotate([90,00,00]) cylinder(d=sproudSize,h=20);
+    }
+}
+
 module potRing() {
-    translate([10,0,outerDiamPot/2+0]) rotate([0,90,0]) difference() {
+    height=20;
+    translate([height/2,0,outerDiamPot/2-wallDiamPot/2]) 
+    rotate([0,90,0]) difference() {
         dInner=outerDiamPot-(wallDiamPot+0.2)*2;
-        cylinder(d1=outerDiamPot,d2=outerDiamPot-3,h=20,center=true);
+        cylinder(d1=outerDiamPot,d2=outerDiamPot-3,h=height,center=true);
         cylinder(d1=dInner,d2=dInner-3,h=21,center=true);
     }
 }

@@ -76,10 +76,7 @@ void scripting_init() {
                                                         });
 
     commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const OptValue & value, ScriptContext & context) {
-        uint32_t time = (int32_t)atol((char*)value);
-        hwConfigModified = (bool)hwConfig.get("hysteresisLoop") != scriptContext->m_moreWaterRequired;
-        hwConfig.put("hysteresisLoop", PropertyValue(scriptContext->m_moreWaterRequired));
-        deep_sleep((int32_t)atol((char*)value) * 1000000);
+        scriptContext->m_deepSleepSec = atol((char*)value);
         return false;
     }
                                                         });

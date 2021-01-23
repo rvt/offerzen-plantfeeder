@@ -12,13 +12,15 @@ public:
     uint16_t m_dryThreshold;
     uint16_t m_wetThreshold;
     uint16_t m_currentValue;
+    int32_t m_deepSleepSec;
     ScriptContext(const char* script) : 
         PlainTextContext512{script}, 
         m_pump(false),
         m_moreWaterRequired(true),
         m_dryThreshold(800),
         m_wetThreshold(500),
-        m_currentValue(1024) {
+        m_currentValue(1024),
+        m_deepSleepSec(0) {
     }
 
     /**
@@ -34,6 +36,8 @@ public:
         return m_moreWaterRequired;
     }
 
+    // returns true when current value is beliw wetThreshold, remember 
+    // the lower the value the wetter the soil
     bool isBelowWet() {
         return m_currentValue <= m_wetThreshold;
     };

@@ -208,3 +208,9 @@ void network_handle() {
 void network_mqtt_disconnect() {
     mqttClient.disconnect();
 }
+
+void network_shutdown() {
+    mqttClient.flush();
+    mqttClient.disconnect();
+    WiFi.disconnect();
+}

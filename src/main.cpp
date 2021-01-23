@@ -125,8 +125,7 @@ bool saveConfig(const char* filename, Properties& properties) {
 }
 
 void publishStatusToMqtt();
-void deep_sleep(uint32_t time_ms) {
-
+void deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
         saveConfig(CONFIG_FILENAME, hwConfig);
     }
@@ -134,10 +133,11 @@ void deep_sleep(uint32_t time_ms) {
         saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig);
     }
     publishStatusToMqtt();
+    network_shutdown();
     Serial.println("Good Night");
     Serial.flush();
-    delay(100);
-    ESP.deepSleep(time_ms*1000);
+    delay(10);
+    ESP.deepSleep(time_us);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -255,6 +255,13 @@ void handleScriptContext() {
         case 1:
             digitalWrite(PUMP_PIN, scripting_context()->pump());
     }
+
+    if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
+        hwConfigModified = (bool)hwConfig.get("hysteresisLoop") != scripting_context()->m_moreWaterRequired;
+        hwConfig.put("hysteresisLoop", PropertyValue(scripting_context()->m_moreWaterRequired));
+        deep_sleep(scripting_context()->m_deepSleepSec * 1000000);
+    }
+
 }
 
 
