@@ -19,12 +19,30 @@ extern void deep_sleep(uint32_t time);
 /*********************
  *      Variables
  *********************/
+constexpr uint8_t SCRIPT_LINE_SIZE_MAX=32;
 
 static ScriptContext* scriptContext{nullptr};
 static ScriptRunner<ScriptContext>* scriptRunner = nullptr;
 static char scriptContextFileToLoad[32]; // See note for handleScriptContext()
 
 using namespace rvt::scriptrunner;
+
+bool OptionalJump(ScriptContext& context, const char* value, const uint8_t jmpPos) {
+    char* jmpLocation = nullptr;
+    OptParser::get<SCRIPT_LINE_SIZE_MAX>(value, ',', [&](const OptValue & v) {
+        if (v.pos() == jmpPos) {
+            jmpLocation = (char*)v;
+        }
+    });
+
+    if (jmpLocation) {
+        context.jump(jmpLocation);
+        return true;
+    }
+
+    return false;
+}
+
 
 void scripting_init() {
     std::vector<Command<ScriptContext>*> commands;
@@ -42,35 +60,27 @@ void scripting_init() {
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"decideDry", [&](const OptValue & value, ScriptContext & context) {
-        return context.requireMoreWater();
+    commands.push_back(new Command<ScriptContext> {"decideAboveDry", [&](const OptValue & value, ScriptContext & context) {
+        if (!context.isAboveDry()) {
+            return OptionalJump(context, value, 0);
+        }
+        return true;
     }
                                                         });
 
     commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const OptValue & value, ScriptContext & context) {
-        if (context.isBelowWet()) {
-                context.jump((char*)value);
+        if (!context.isBelowWet()) {
+            return OptionalJump(context, value, 0);
         }
 
         return true;
     }
                                                         });
-
-    commands.push_back(new Command<ScriptContext> {"decideDryOrWet", [&](const OptValue & value, ScriptContext & context) {
-        char buffer[16];
-        strncpy(buffer, (char*)value, sizeof(buffer));
-        const char* jmpLocationDry;
-        const char* jmpLocationWet;
-        OptParser::get(buffer, ',', [&](const OptValue & value) {
-            if (value.pos() == 0) {
-                jmpLocationDry = value.key();
-            } else if (value.pos() == 1) {
-                jmpLocationWet = value.key();
-            }
-        });
-
-        context.jump(context.requireMoreWater()?jmpLocationDry:jmpLocationWet);
-
+    
+    commands.push_back(new Command<ScriptContext> {"wateringCycle", [&](const OptValue & value, ScriptContext & context) {
+        if (!context.wateringCycle()) {
+            return OptionalJump(context, value, 0);
+        }
         return true;
     }
                                                         });
@@ -108,7 +118,7 @@ void load_script() {
         Serial.println(scriptContextFileToLoad);
         delete scriptContext;
         scriptContext = new ScriptContext{buffer};
-        scriptContext->m_moreWaterRequired = (bool)hwConfig.get("hysteresisLoop");
+        scriptContext->m_wateringCycle = (bool)hwConfig.get("wateringCycle");
     } else {
         Serial.print(F("File not found: "));
         Serial.println(scriptContextFileToLoad);

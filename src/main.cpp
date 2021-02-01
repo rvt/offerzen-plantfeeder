@@ -65,7 +65,7 @@ uint32_t shouldRestart = 0;        // Indicate that a service requested an resta
 ///////////////////////////////////////////////////////////////////////////
 //  Loading/Saving of Properties
 ///////////////////////////////////////////////////////////////////////////
-bool loadConfig(const char* filename, Properties& properties) {
+bool loadConfig(const char* filename, Properties& properties, bool serial) {
     bool ret = false;
 
     if (FileSystemFSBegin()) {
@@ -79,7 +79,7 @@ bool loadConfig(const char* filename, Properties& properties) {
                 Serial.print(F("Loading config : "));
                 Serial.println(filename);
                 deserializeProperties<LINE_BUFFER_SIZE>(configFile, properties);
-                //serializeProperties<LINE_BUFFER_SIZE>(Serial, properties);
+                if (serial) serializeProperties<LINE_BUFFER_SIZE>(Serial, properties);
             }
 
             configFile.close();
@@ -99,7 +99,7 @@ bool loadConfig(const char* filename, Properties& properties) {
 /**
  * Store custom oarameter configuration in FileSystemFS
  */
-bool saveConfig(const char* filename, Properties& properties) {
+bool saveConfig(const char* filename, Properties& properties, bool serial) {
     bool ret = false;
 
     if (FileSystemFSBegin()) {
@@ -110,7 +110,8 @@ bool saveConfig(const char* filename, Properties& properties) {
             Serial.print(F("Saving config : "));
             Serial.println(filename);
             serializeProperties<LINE_BUFFER_SIZE>(configFile, properties);
-            //serializeProperties<LINE_BUFFER_SIZE>(Serial, properties, false);
+            if (serial)
+            serializeProperties<LINE_BUFFER_SIZE>(Serial, properties, false);
             ret = true;
         } else {
             Serial.print(F("Failed to write file"));
@@ -127,15 +128,16 @@ bool saveConfig(const char* filename, Properties& properties) {
 void publishStatusToMqtt();
 void deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
-        saveConfig(CONFIG_FILENAME, hwConfig);
+        saveConfig(CONFIG_FILENAME, hwConfig, true);
     }
     if (controllerConfigModified) {
-        saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig);
+        saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
     }
     publishStatusToMqtt();
     network_shutdown();
-    Serial.println("Good Night");
-    Serial.flush();
+    Serial.print("Good Night, see you in ");
+    Serial.print(time_us/1000000);
+    Serial.println(" seconds");
     delay(10);
     ESP.deepSleep(time_us);
 }
@@ -147,18 +149,16 @@ void deep_sleep(uint32_t time_us) {
 * Publish current status
 */
 void publishStatusToMqtt() {
-    char* format;
-    char* buffer;
-
-    static char f[] = "pump=%i hygro=%d";
-    static char b[sizeof(f) + 3 * 8 + 10]; // 2 bytes per extra item + 10 extra
-    format = f;
-    buffer = b;
+    const char format[] = "pump=%i hygro=%d wet=%d dry=%d cycle=%d";
+    char buffer[sizeof(format) + 2 + 2 + 2 + 2 -1 + 8]; 
 
     sprintf(buffer,
             format,
             scripting_context()->m_pump,
-            scripting_context()->m_currentValue
+            scripting_context()->m_currentValue,
+            scripting_context()->m_wetThreshold,
+            scripting_context()->m_dryThreshold,
+            scripting_context()->m_wateringCycle
            );
 
 
@@ -176,22 +176,21 @@ void publishStatusToMqtt() {
  */
 void handleCmd(const char* topic, const char* p_payload) {
     auto topicPos = topic + strlen(controllerConfig.get("mqttBaseTopic"));
-    // Serial.print(F("Handle command : "));
-    // Serial.print(topicPos);
-    // Serial.print(F(" : "));
-    // Serial.println(p_payload);
+    Serial.print(F("Handle command : "));
+    Serial.print(topicPos);
+    Serial.print(F(" : "));
+    Serial.println(p_payload);
 
     // Look for a temperature setPoint topic
     char payloadBuffer[LINE_BUFFER_SIZE];
     strncpy(payloadBuffer, p_payload, sizeof(payloadBuffer));
 
     if (strstr(topicPos, "config") != nullptr) {
-        // If ON/OFF are used within the color topic
         OptParser::get(payloadBuffer, [&](OptValue v) {
-            if (strcmp(v.key(), "min") == 0) {
+            if (strcmp(v.key(), "wet") == 0) {
                 hwConfig.put("wetThreshold", PV((int16_t)v));
                 hwConfigModified=true;
-            } else if (strcmp(v.key(), "max") == 0) {
+            } else if (strcmp(v.key(), "dry") == 0) {
                 hwConfig.put("dryThreshold", PV((int16_t)v));
                 hwConfigModified=true;
             }
@@ -206,7 +205,7 @@ void handleCmd(const char* topic, const char* p_payload) {
         deep_sleep(atol(payloadBuffer));
     }
 
-    if (strstr(topicPos, "/reset") != nullptr) {
+    if (strstr(topicPos, "reset") != nullptr) {
         if (strcmp(payloadBuffer, "1") == 0) {
             shouldRestart = millis();
         }
@@ -257,8 +256,8 @@ void handleScriptContext() {
     }
 
     if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
-        hwConfigModified = (bool)hwConfig.get("hysteresisLoop") != scripting_context()->m_moreWaterRequired;
-        hwConfig.put("hysteresisLoop", PropertyValue(scripting_context()->m_moreWaterRequired));
+        hwConfigModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->m_wateringCycle;
+        hwConfig.put("wateringCycle", PropertyValue(scripting_context()->m_wateringCycle));
         deep_sleep(scripting_context()->m_deepSleepSec * 1000000);
     }
 
@@ -363,7 +362,7 @@ void setDefaultConfigurations() {
     // hwConfig
     hwConfigModified |= hwConfig.putNotContains("dryThreshold", PV(800));
     hwConfigModified |= hwConfig.putNotContains("wetThreshold", PV(600));
-    hwConfigModified |= hwConfig.putNotContains("hysteresisLoop", PV(true));    
+    hwConfigModified |= hwConfig.putNotContains("wateringCycle", PV(true));    
 }
 
 void setup() {
@@ -375,8 +374,8 @@ void setup() {
     }
 
     // load configurations
-    loadConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig);
-    loadConfig(CONFIG_FILENAME, hwConfig);
+    loadConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
+    loadConfig(CONFIG_FILENAME, hwConfig, true);
     setDefaultConfigurations();
 
     scripting_init();
@@ -412,14 +411,14 @@ void loop() {
         } else if (counter50TimesSec % maxSlots == slot50++) {
             if (controllerConfigModified) {
                 controllerConfigModified = false;
-                saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig);
+                saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
             }
         } else if (counter50TimesSec % maxSlots == slot50++) {
             handleScriptContext();
         } else if (counter50TimesSec % maxSlots == slot50++) {
             if (hwConfigModified) {
                 hwConfigModified = false;
-                saveConfig(CONFIG_FILENAME, hwConfig);
+                saveConfig(CONFIG_FILENAME, hwConfig, true);
             }
 
         } else if (counter50TimesSec % maxSlots == slot50++) {
