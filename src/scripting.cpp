@@ -27,23 +27,6 @@ static char scriptContextFileToLoad[32]; // See note for handleScriptContext()
 
 using namespace rvt::scriptrunner;
 
-bool OptionalJump(ScriptContext& context, const char* value, const uint8_t jmpPos) {
-    char* jmpLocation = nullptr;
-    OptParser::get<SCRIPT_LINE_SIZE_MAX>(value, ',', [&](const OptValue & v) {
-        if (v.pos() == jmpPos) {
-            jmpLocation = (char*)v;
-        }
-    });
-
-    if (jmpLocation) {
-        context.jump(jmpLocation);
-        return true;
-    }
-
-    return false;
-}
-
-
 void scripting_init() {
     std::vector<Command<ScriptContext>*> commands;
 
@@ -62,7 +45,7 @@ void scripting_init() {
 
     commands.push_back(new Command<ScriptContext> {"decideAboveDry", [&](const OptValue & value, ScriptContext & context) {
         if (!context.isAboveDry()) {
-            return OptionalJump(context, value, 0);
+            context.jump((char*)value);
         }
         return true;
     }
@@ -70,7 +53,7 @@ void scripting_init() {
 
     commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const OptValue & value, ScriptContext & context) {
         if (!context.isBelowWet()) {
-            return OptionalJump(context, value, 0);
+            context.jump((char*)value);
         }
 
         return true;
@@ -79,7 +62,7 @@ void scripting_init() {
     
     commands.push_back(new Command<ScriptContext> {"wateringCycle", [&](const OptValue & value, ScriptContext & context) {
         if (!context.wateringCycle()) {
-            return OptionalJump(context, value, 0);
+            context.jump((char*)value);
         }
         return true;
     }
