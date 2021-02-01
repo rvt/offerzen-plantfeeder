@@ -402,7 +402,7 @@ void loop() {
         counter50TimesSec++;
 
         // once a second publish status to mqtt (if there are changes)
-        if (counter50TimesSec % 10 == 0) {
+        if (counter50TimesSec % 25 == 0) {
             publishStatusToMqtt();
         }
 
