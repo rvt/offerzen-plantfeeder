@@ -154,7 +154,7 @@ void publishStatusToMqtt() {
 
     sprintf(buffer,
             format,
-            scripting_context()->m_pump,
+            scripting_context()->pump(),
             scripting_context()->m_currentValue,
             scripting_context()->m_wetThreshold,
             scripting_context()->m_dryThreshold,
@@ -253,6 +253,9 @@ void handleScriptContext() {
     
         case 1:
             digitalWrite(PUMP_PIN, scripting_context()->pump());
+            if (scripting_context()->pump()) {
+                publishStatusToMqtt();
+            }
     }
 
     if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
@@ -399,7 +402,7 @@ void loop() {
         counter50TimesSec++;
 
         // once a second publish status to mqtt (if there are changes)
-        if (counter50TimesSec % 50 == 0) {
+        if (counter50TimesSec % 10 == 0) {
             publishStatusToMqtt();
         }
 
