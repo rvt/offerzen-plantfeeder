@@ -27,55 +27,65 @@ static char scriptContextFileToLoad[32]; // See note for handleScriptContext()
 
 using namespace rvt::scriptrunner;
 
+bool getBoolValue(const char* value, uint8_t pos) {
+    bool rValue = false;
+    OptParser::get<SCRIPT_LINE_SIZE_MAX>(value, ',', [&](const OptValue & parsed) {
+        if (parsed.pos() == pos) {
+            rValue = (bool)parsed;
+        }
+    });
+    return rValue;
+}
+
 void scripting_init() {
     std::vector<Command<ScriptContext>*> commands;
 
-    commands.push_back(new Command<ScriptContext> {"serial", [](const OptValue & value, ScriptContext & context) {
-        Serial.println((char*)value);
+    commands.push_back(new Command<ScriptContext> {"serial", [](const char* value, ScriptContext & context) {
+        Serial.println(value);
         Serial.flush();
         return true;
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"pump", [](const OptValue & value, ScriptContext & context) {
-        context.m_pump = (bool)value;
+    commands.push_back(new Command<ScriptContext> {"pump", [](const char* value, ScriptContext & context) {
+        context.m_pump = getBoolValue(value, 0);
         return true;
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"decideAboveDry", [&](const OptValue & value, ScriptContext & context) {
+    commands.push_back(new Command<ScriptContext> {"decideAboveDry", [&](const char* value, ScriptContext & context) {
         if (!context.isAboveDry()) {
-            context.jump((char*)value);
+            context.jump(value);
         }
         return true;
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const OptValue & value, ScriptContext & context) {
+    commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const char* value, ScriptContext & context) {
         if (!context.isBelowWet()) {
-            context.jump((char*)value);
+            context.jump(value);
         }
 
         return true;
     }
                                                         });
     
-    commands.push_back(new Command<ScriptContext> {"wateringCycle", [&](const OptValue & value, ScriptContext & context) {
+    commands.push_back(new Command<ScriptContext> {"wateringCycle", [&](const char* value, ScriptContext & context) {
         if (!context.wateringCycle()) {
-            context.jump((char*)value);
+            context.jump(value);
         }
         return true;
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const OptValue & value, ScriptContext & context) {
-        scriptContext->m_deepSleepSec = atol((char*)value);
+    commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const char* value, ScriptContext & context) {
+        scriptContext->m_deepSleepSec = atol(value);
         return false;
     }
                                                         });
 
-    commands.push_back(new Command<ScriptContext> {"load", [&](const OptValue & value, ScriptContext & context) {
-        strncpy(scriptContextFileToLoad, (char*)value, sizeof(scriptContextFileToLoad));
+    commands.push_back(new Command<ScriptContext> {"load", [&](const char* value, ScriptContext & context) {
+        strncpy(scriptContextFileToLoad, value, sizeof(scriptContextFileToLoad));
         return true;
     }
                                                         });
