@@ -7,3 +7,4 @@ build/
 .history/
 controllerCfg.conf
 *.sh
+*.gcode
