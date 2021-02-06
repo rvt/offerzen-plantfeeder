@@ -42,7 +42,7 @@ module soilProbe(bottom=true) {
             }
             union() {
                 // Cut in half
-                translate([0,0,dim.z/2]) cube(dim, center=true);
+                translate([0,0,dim.z]) cube([dim.x*2,dim.y*2,dim.z*2], center=true);
 
                 // Room for Wire
                 translate([0,probeEndOffset+2,0]) {
@@ -62,8 +62,10 @@ module soilProbe(bottom=true) {
             }
         }
 
-        %translate([probeSpacingD2,probeEndOffset,0]) probe();
-        %translate([-probeSpacingD2,probeEndOffset,0]) probe();
+        if (bottom) {
+            %translate([probeSpacingD2,probeEndOffset,0]) probe();
+            %translate([-probeSpacingD2,probeEndOffset,0]) probe();
+        }
     }
 }
 
@@ -76,7 +78,7 @@ module screw() {
 
 module probe() {
     pointL=probeDiam*2.5;
-    color([0.5,1,0.5]) rotate([90,0,0]) {
+    color([0.4,.4,.4,0.5]) rotate([90,0,0]) {
         cylinder(d=probeDiam,h=probeLength-pointL);
         translate([0,0,probeLength-pointL]) cylinder(d2=0, d1=probeDiam, h=probeDiam*2.5);
     }
