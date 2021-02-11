@@ -247,11 +247,13 @@ void handleScriptContext() {
     switch (handle) {
         case 0:
             digitalWrite(PUMP_PIN, false);
+            digitalWrite(PROBEPWR_PIN, false);
             Serial.println("Script ended");
             scripting_load("/default.txt");
             break;
     
         case 1:
+            digitalWrite(PROBEPWR_PIN, scripting_context()->probe());
             digitalWrite(PUMP_PIN, scripting_context()->pump());
             if (scripting_context()->pump()) {
                 publishStatusToMqtt();
@@ -273,10 +275,11 @@ void handleScriptContext() {
 void setupIOHardware() {
     // Pump Pin
     pinMode(PUMP_PIN, OUTPUT);    
+    digitalWrite(PUMP_PIN, false);
 
-    // Moisture digital
-    pinMode(MOIST_PIN, INPUT);   
-
+    // Power pin of probe
+    pinMode(PROBEPWR_PIN, OUTPUT);    
+    digitalWrite(PROBEPWR_PIN, false);
 }
 
 ///////////////////////////////////////////////////////////////////////////

@@ -78,6 +78,12 @@ void scripting_init() {
     }
                                                         });
 
+    commands.push_back(new Command<ScriptContext> {"probe", [&](const char* value, ScriptContext & context) {
+        context.probe(getBoolValue(value, 0));
+        return true;
+    }
+                                                        });
+
     commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const char* value, ScriptContext & context) {
         scriptContext->m_deepSleepSec = atol(value);
         return false;

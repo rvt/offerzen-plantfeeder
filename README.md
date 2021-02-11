@@ -27,6 +27,14 @@ Use `platformio run --target uploadfs -e default`to upload the needed filesystem
 * Look into your serial terminal and note your IP address and ID of your feeder.
 * Use a webbrowser and fill in your WiFi and MQTT parameters
 
+## PIN Connections
+
+* Connection GPIO16 to the Reset pin
+* Connect D8 to the VSS of the moisture sensor, we turn the moisture sensor on/off before and after a measurement to prevent corrision.
+* Connect A0 to the analog out pin of the moisture sensor
+* Connect GND of the moisture sensor to the GND of the ESP8266
+* Connect D6 to the base (visa resistor) to the transistor to control the motor
+
 ## Set threshold values use MQTT and issue the following commands
 
 * Topic: `plantfeeder/XXXXXXXX/config`
