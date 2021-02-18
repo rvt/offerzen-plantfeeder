@@ -136,7 +136,7 @@ int8_t scripting_handle() {
         return 1;
     } else if (scriptContext == nullptr) { 
         return -1;
-    } else if (scriptRunner->handle(*scriptContext)) {
+    } else if (scriptRunner->handle(*scriptContext, true)) {
         return 1;
     } else {
         delete scriptContext;
