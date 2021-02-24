@@ -86,7 +86,7 @@ void scripting_init() {
 
     commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const char* value, ScriptContext & context) {
         scriptContext->m_deepSleepSec = atol(value);
-        return false;
+        return true;
     }
                                                         });
 

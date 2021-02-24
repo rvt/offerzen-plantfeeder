@@ -13,3 +13,5 @@ void network_handle();
 void network_publishToMQTT(const char* topic, const char* payload);
 void network_mqtt_callback(MQTT_CALLBACK_SIGNATURE);
 void network_mqtt_disconnect();
+bool network_is_connected();
+void network_flush();

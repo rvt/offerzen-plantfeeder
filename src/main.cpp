@@ -27,11 +27,11 @@ extern "C" {
 typedef PropertyValue PV;
 
 // of transitions
-uint32_t counter50TimesSec = 1;
+uint32_t slotCounterPerTick = 1;
 
 // Number calls per second we will be handling
-constexpr uint8_t FRAMES_PER_SECOND        = 50;
-constexpr uint16_t EFFECT_PERIOD_CALLBACK = (1000 / FRAMES_PER_SECOND);
+constexpr uint8_t TICKS_PER_SECOND        = 100;
+constexpr uint16_t TICK_PERIOD_CALLBACK = (1000 / TICKS_PER_SECOND);
 constexpr uint8_t LINE_BUFFER_SIZE = 128;
 constexpr uint8_t PARAMETER_SIZE = 16;
 
@@ -126,21 +126,33 @@ bool saveConfig(const char* filename, Properties& properties, bool serial) {
 }
 
 void publishStatusToMqtt();
-void deep_sleep(uint32_t time_us) {
+bool deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
         saveConfig(CONFIG_FILENAME, hwConfig, true);
     }
     if (controllerConfigModified) {
         saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
     }
-    publishStatusToMqtt();
-    network_shutdown();
-    Serial.print("Good Night, see you in ");
-    Serial.print(time_us/1000000);
-    Serial.println(" seconds");
-    delay(10);
-    ESP.deepSleep(time_us);
-}
+
+    if (network_is_connected()) {
+        publishStatusToMqtt();
+        if (controllerConfig.get("deepSleepEnabled")) {
+            network_flush();
+            delay(50);
+            network_shutdown();
+            Serial.print("Good Night, see you in ");
+            Serial.print(time_us/1000000);
+            Serial.println(" seconds");
+            ESP.deepSleep(time_us);
+        } else  {
+            Serial.println("Deep sleep disabled.");
+        }
+        return true;
+    } else {
+        Serial.println("No network, will not sleep.");
+    }
+    return false;
+ }
 
 ///////////////////////////////////////////////////////////////////////////
 //  MQTT
@@ -237,7 +249,9 @@ void setupMQTTCallback() {
 ///////////////////////////////////////////////////////////////////////////
 void handleScriptContext() {
     if (scripting_context() != nullptr) {
-        scripting_context()->m_currentValue = analogRead(MOISTA_PIN);
+        if (scripting_context()->probe()) {
+            scripting_context()->m_currentValue = analogRead(MOISTA_PIN);
+        }
         scripting_context()->m_dryThreshold = (int16_t)hwConfig.get("dryThreshold");
         scripting_context()->m_wetThreshold = (int16_t)hwConfig.get("wetThreshold");
     }
@@ -259,13 +273,6 @@ void handleScriptContext() {
                 publishStatusToMqtt();
             }
     }
-
-    if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
-        hwConfigModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->m_wateringCycle;
-        hwConfig.put("wateringCycle", PropertyValue(scripting_context()->m_wateringCycle));
-        deep_sleep(scripting_context()->m_deepSleepSec * 1000000);
-    }
-
 }
 
 
@@ -360,6 +367,7 @@ void setDefaultConfigurations() {
     controllerConfigModified |= controllerConfig.putNotContains("mqttPassword", PV(""));
     controllerConfigModified |= controllerConfig.putNotContains("mqttPort", PV(1883));
     controllerConfigModified |= controllerConfig.putNotContains("pauseForOTA", PV(true));
+    controllerConfigModified |= controllerConfig.putNotContains("deepSleepEnabled", PV(true));
 
     controllerConfig.put("mqttClientID", PV(mqttClientID));
     controllerConfig.put("mqttBaseTopic", PV(mqttBaseTopic));
@@ -394,45 +402,47 @@ void setup() {
     effectPeriodStartMillis = millis();
 }
 
-constexpr uint8_t NUMBER_OF_SLOTS = 10;
 uint8_t maxSlots = 255;
-bool motor = false;
 void loop() {
     const uint32_t currentMillis = millis();
 
-    if (currentMillis - effectPeriodStartMillis >= EFFECT_PERIOD_CALLBACK) {
-        effectPeriodStartMillis += EFFECT_PERIOD_CALLBACK;
-        counter50TimesSec++;
+    if (currentMillis - effectPeriodStartMillis >= TICK_PERIOD_CALLBACK) {
+        effectPeriodStartMillis += TICK_PERIOD_CALLBACK;
+        slotCounterPerTick++;
 
-        // once a second publish status to mqtt (if there are changes)
-        if (counter50TimesSec % 25 == 0) {
-            publishStatusToMqtt();
-        }
+        handleScriptContext();
+        publishStatusToMqtt();
 
         // Maintenance stuff
         uint8_t slot50 = 0;
 
-        if (counter50TimesSec % maxSlots == slot50++) {
+        if (slotCounterPerTick % maxSlots == slot50++) {
             network_handle();
-        } else if (counter50TimesSec % maxSlots == slot50++) {
+        } else if (slotCounterPerTick % maxSlots == slot50++) {
             if (controllerConfigModified) {
                 controllerConfigModified = false;
                 saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
             }
-        } else if (counter50TimesSec % maxSlots == slot50++) {
-            handleScriptContext();
-        } else if (counter50TimesSec % maxSlots == slot50++) {
+        } else if (slotCounterPerTick % maxSlots == slot50++) {
             if (hwConfigModified) {
                 hwConfigModified = false;
                 saveConfig(CONFIG_FILENAME, hwConfig, true);
             }
 
-        } else if (counter50TimesSec % maxSlots == slot50++) {
+        } else if (slotCounterPerTick % maxSlots == slot50++) {
             wm.process();
-        } else if (counter50TimesSec % maxSlots == slot50++) {
+        } else if (slotCounterPerTick % maxSlots == slot50++) {
             if (shouldRestart != 0 && (currentMillis - shouldRestart >= 5000)) {
                 shouldRestart = 0;
                 ESP.restart();
+            }
+        } else if (slotCounterPerTick % maxSlots == slot50++) {
+            if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
+                hwConfigModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->m_wateringCycle;
+                hwConfig.put("wateringCycle", PropertyValue(scripting_context()->m_wateringCycle));
+                if (deep_sleep(scripting_context()->m_deepSleepSec * 1000000)) {
+                    scripting_context()->m_deepSleepSec = 0;
+                }
             }
         } else {
             maxSlots = slot50;

@@ -210,7 +210,14 @@ void network_mqtt_disconnect() {
 }
 
 void network_shutdown() {
-    mqttClient.flush();
     mqttClient.disconnect();
     WiFi.disconnect();
+}
+
+void network_flush() {
+    mqttClient.flush();
+}
+
+bool network_is_connected() {
+    return mqttClient.connected() && WiFi.status() == WL_CONNECTED;
 }
