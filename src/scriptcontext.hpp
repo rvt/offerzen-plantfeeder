@@ -6,23 +6,37 @@ using namespace rvt::scriptrunner;
 typedef PlainTextContext<512> PlainTextContext512;
 
 class ScriptContext : public PlainTextContext512 {
-public:
+private:
     bool m_pump;
     bool m_wateringCycle;
     bool m_probe;
+    uint16_t m_currentValue;
+public:
     uint16_t m_dryThreshold;
     uint16_t m_wetThreshold;
-    uint16_t m_currentValue;
     int32_t m_deepSleepSec;
-    ScriptContext(const char* script) : 
+    ScriptContext(const char* script, bool wateringCycle) : 
         PlainTextContext512{script}, 
         m_pump(false),
-        m_wateringCycle(true),
+        m_wateringCycle(wateringCycle),
         m_probe(false),
+        m_currentValue(1024),
         m_dryThreshold(800),
         m_wetThreshold(500),
-        m_currentValue(1024),
         m_deepSleepSec(0) {
+    }
+
+    void currentValue(uint16_t currentValue) {
+        m_currentValue = currentValue;
+        if ( m_currentValue >= m_dryThreshold) {
+            m_wateringCycle=true;
+        } else if ( m_currentValue <= m_wetThreshold) {
+            m_wateringCycle=false;
+        }
+    }
+
+    uint16_t currentValue() {
+        return m_currentValue;
     }
 
     /**
@@ -30,11 +44,6 @@ public:
     * returns true if more water is required
     */
     bool wateringCycle() {
-        if ( m_currentValue >= m_dryThreshold) {
-            m_wateringCycle=true;
-        } else if ( m_currentValue <= m_wetThreshold) {
-            m_wateringCycle=false;
-        }
         return m_wateringCycle;
     }
 
@@ -49,6 +58,10 @@ public:
 
     bool pump() {
         return m_currentValue > 1020?false:m_pump;
+    }
+
+    void pump(bool p) {
+        m_pump = p;
     }
         
     void probe(bool v) {

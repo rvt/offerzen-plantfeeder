@@ -125,7 +125,7 @@ bool saveConfig(const char* filename, Properties& properties, bool serial) {
     return ret;
 }
 
-void publishStatusToMqtt();
+void publishStatusToMqtt(bool force);
 bool deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
         saveConfig(CONFIG_FILENAME, hwConfig, true);
@@ -135,10 +135,11 @@ bool deep_sleep(uint32_t time_us) {
     }
 
     if (network_is_connected()) {
-        publishStatusToMqtt();
+        publishStatusToMqtt(true);
         if (controllerConfig.get("deepSleepEnabled")) {
             network_flush();
-            delay(50);
+            FileSystemFS.end();
+            delay(10);
             network_shutdown();
             Serial.print("Good Night, see you in ");
             Serial.print(time_us/1000000);
@@ -160,27 +161,30 @@ bool deep_sleep(uint32_t time_us) {
 /*
 * Publish current status
 */
-void publishStatusToMqtt() {
+void publishStatusToMqtt(bool force) {
     const char format[] = "pump=%i hygro=%d wet=%d dry=%d cycle=%d";
     char buffer[sizeof(format) + 2 + 2 + 2 + 2 -1 + 8]; 
 
     sprintf(buffer,
             format,
             scripting_context()->pump(),
-            scripting_context()->m_currentValue,
+            scripting_context()->currentValue(),
             scripting_context()->m_wetThreshold,
             scripting_context()->m_dryThreshold,
-            scripting_context()->m_wateringCycle
+            scripting_context()->wateringCycle()
            );
 
 
     // Quick hack to only update when data actually changed
     uint16_t thisCrc = crc16((uint8_t*)buffer, std::strlen(buffer));
 
-    if (thisCrc != lastMeasurementCRC) {
+    if (thisCrc != lastMeasurementCRC || force) {
         network_publishToMQTT("status", buffer);
         lastMeasurementCRC = thisCrc;
     }
+}
+void publishStatusToMqtt() {
+    publishStatusToMqtt(false);
 }
 
 /**
@@ -250,7 +254,7 @@ void setupMQTTCallback() {
 void handleScriptContext() {
     if (scripting_context() != nullptr) {
         if (scripting_context()->probe()) {
-            scripting_context()->m_currentValue = analogRead(MOISTA_PIN);
+            scripting_context()->currentValue(analogRead(MOISTA_PIN));
         }
         scripting_context()->m_dryThreshold = (int16_t)hwConfig.get("dryThreshold");
         scripting_context()->m_wetThreshold = (int16_t)hwConfig.get("wetThreshold");
@@ -438,8 +442,8 @@ void loop() {
             }
         } else if (slotCounterPerTick % maxSlots == slot50++) {
             if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
-                hwConfigModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->m_wateringCycle;
-                hwConfig.put("wateringCycle", PropertyValue(scripting_context()->m_wateringCycle));
+                hwConfigModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->wateringCycle();
+                hwConfig.put("wateringCycle", PropertyValue(scripting_context()->wateringCycle()));
                 if (deep_sleep(scripting_context()->m_deepSleepSec * 1000000)) {
                     scripting_context()->m_deepSleepSec = 0;
                 }

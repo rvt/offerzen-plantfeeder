@@ -48,7 +48,7 @@ void scripting_init() {
                                                         });
 
     commands.push_back(new Command<ScriptContext> {"pump", [](const char* value, ScriptContext & context) {
-        context.m_pump = getBoolValue(value, 0);
+        context.pump(getBoolValue(value, 0));
         return true;
     }
                                                         });
@@ -116,8 +116,7 @@ void load_script() {
         Serial.print(F("Loaded : "));
         Serial.println(scriptContextFileToLoad);
         delete scriptContext;
-        scriptContext = new ScriptContext{buffer};
-        scriptContext->m_wateringCycle = (bool)hwConfig.get("wateringCycle");
+        scriptContext = new ScriptContext{buffer, (bool)hwConfig.get("wateringCycle")};
     } else {
         Serial.print(F("File not found: "));
         Serial.println(scriptContextFileToLoad);
