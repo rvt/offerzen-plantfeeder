@@ -209,6 +209,9 @@ void handleCmd(const char* topic, const char* p_payload) {
             } else if (strcmp(v.key(), "dry") == 0) {
                 hwConfig.put("dryThreshold", PV((int16_t)v));
                 hwConfigModified=true;
+            } else if (strcmp(v.key(), "deepSleepEnabled") == 0) {
+                controllerConfig.put("deepSleepEnabled", PV((bool)v));
+                controllerConfigModified=true;
             }
         });
     }
@@ -370,7 +373,7 @@ void setDefaultConfigurations() {
     controllerConfigModified |= controllerConfig.putNotContains("mqttUsername", PV(""));
     controllerConfigModified |= controllerConfig.putNotContains("mqttPassword", PV(""));
     controllerConfigModified |= controllerConfig.putNotContains("mqttPort", PV(1883));
-    controllerConfigModified |= controllerConfig.putNotContains("pauseForOTA", PV(true));
+    controllerConfigModified |= controllerConfig.putNotContains("pauseForOTA", PV(false));
     controllerConfigModified |= controllerConfig.putNotContains("deepSleepEnabled", PV(true));
 
     controllerConfig.put("mqttClientID", PV(mqttClientID));
@@ -400,8 +403,8 @@ void setup() {
     scripting_load("/default.txt");
 
     setupIOHardware();
-    network_init();
     setupMQTTCallback();
+    network_init();
     setupWifiManager();
     effectPeriodStartMillis = millis();
 }

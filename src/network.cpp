@@ -137,7 +137,8 @@ void network_init() {
                 controllerConfig.get("mqttLastWillTopic"),
                 0,
                 1,
-                MQTT_LASTWILL_OFFLINE)
+                MQTT_LASTWILL_OFFLINE,
+                false)
            ) {
             return PUBLISHONLINE;
         }

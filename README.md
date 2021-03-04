@@ -49,6 +49,18 @@ Consequently, when the measured value is above dry we will be adding more water;
 
 No MQTT, No problem! Edit `data/hwCfg.conf`and fill in the values. (The L in front of the number is correct and not a typo, format is very strict, no spaces and integer only!)
 
+## Enable/Disable deepSleep
+
+To enable deepSleep
+
+* Topic: `plantfeeder/XXXXXXXX/config`
+* Payload: `deepSleepEnabled=1`
+
+To disable deepSleep
+
+* Topic: `plantfeeder/XXXXXXXX/config`
+* Payload: `deepSleepEnabled=0`
+
 ## Scripting.
 
 It uses a very little script and primitive to turn on/off the motor, see ´data/default.txt´ to change timings of the motor. If you want to add detecting of moisture levels within the script then look into
