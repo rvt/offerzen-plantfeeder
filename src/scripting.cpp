@@ -131,6 +131,7 @@ void scripting_load(const char* value) {
 
 int8_t scripting_handle() {
     if (strlen(scriptContextFileToLoad) != 0) {
+        // Note: Never run handle right after loading a script
         load_script();
         return 1;
     } else if (scriptContext == nullptr) { 

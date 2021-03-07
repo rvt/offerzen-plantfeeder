@@ -136,7 +136,7 @@ void network_init() {
                 controllerConfig.get("mqttPassword"),
                 controllerConfig.get("mqttLastWillTopic"),
                 0,
-                1,
+                true,
                 MQTT_LASTWILL_OFFLINE,
                 false)
            ) {

@@ -19,6 +19,7 @@ extern "C" {
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <propertyutils.hpp>
 #include <optparser.hpp>
+#include <oneshot.hpp>
 #include <utils.h>
 
 #include <config.hpp>
@@ -61,6 +62,26 @@ bool hwConfigModified = false;
 // CRC value of last update to MQTT
 uint16_t lastMeasurementCRC = 0;
 uint32_t shouldRestart = 0;        // Indicate that a service requested an restart. Set to millies() of current time and it will restart 5000ms later
+
+
+
+///////////////////////////////////////////////////////////////////////////
+//  Sending MQTT max once per seco
+///////////////////////////////////////////////////////////////////////////
+
+void publishStatusToMqtt();
+OneShot publishStatusToMqttOneShot{
+    1000,
+    []() {
+    },
+    []() {
+        publishStatusToMqtt();
+        publishStatusToMqttOneShot.reset();
+    },
+    []() {
+        return true;
+    }
+};
 
 ///////////////////////////////////////////////////////////////////////////
 //  Loading/Saving of Properties
@@ -125,22 +146,24 @@ bool saveConfig(const char* filename, Properties& properties, bool serial) {
     return ret;
 }
 
-void publishStatusToMqtt(bool force);
+void publishStatusToMqtt();
 bool deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
         saveConfig(CONFIG_FILENAME, hwConfig, true);
+        hwConfigModified=false;
     }
     if (controllerConfigModified) {
         saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
+        controllerConfigModified=false;
     }
 
     if (network_is_connected()) {
-        publishStatusToMqtt(true);
+        publishStatusToMqtt();
         if (controllerConfig.get("deepSleepEnabled")) {
             network_flush();
-            FileSystemFS.end();
             delay(10);
             network_shutdown();
+            FileSystemFS.end();
             Serial.print("Good Night, see you in ");
             Serial.print(time_us/1000000);
             Serial.println(" seconds");
@@ -161,7 +184,9 @@ bool deep_sleep(uint32_t time_us) {
 /*
 * Publish current status
 */
-void publishStatusToMqtt(bool force) {
+void publishStatusToMqtt() {
+    if (scripting_context()==nullptr) return;
+
     const char format[] = "pump=%i hygro=%d wet=%d dry=%d cycle=%d";
     char buffer[sizeof(format) + 2 + 2 + 2 + 2 -1 + 8]; 
 
@@ -178,13 +203,10 @@ void publishStatusToMqtt(bool force) {
     // Quick hack to only update when data actually changed
     uint16_t thisCrc = crc16((uint8_t*)buffer, std::strlen(buffer));
 
-    if (thisCrc != lastMeasurementCRC || force) {
+    if (thisCrc != lastMeasurementCRC) {
         network_publishToMQTT("status", buffer);
         lastMeasurementCRC = thisCrc;
     }
-}
-void publishStatusToMqtt() {
-    publishStatusToMqtt(false);
 }
 
 /**
@@ -243,7 +265,7 @@ void setupMQTTCallback() {
             return;
         }
 
-        memcpy(mqttReceiveBuffer, p_payload, p_length);
+        strncpy(mqttReceiveBuffer, (char *)p_payload, LINE_BUFFER_SIZE);
         mqttReceiveBuffer[p_length] = 0;
         handleCmd(p_topic, mqttReceiveBuffer);
     });
@@ -276,8 +298,11 @@ void handleScriptContext() {
         case 1:
             digitalWrite(PROBEPWR_PIN, scripting_context()->probe());
             digitalWrite(PUMP_PIN, scripting_context()->pump());
-            if (scripting_context()->pump()) {
-                publishStatusToMqtt();
+            bool wateringCycle=(bool)hwConfig.get("wateringCycle");
+            bool wateringCycleModified = wateringCycle!=scripting_context()->wateringCycle();
+            hwConfigModified |= wateringCycleModified;
+            if (wateringCycleModified) {
+                hwConfig.put("wateringCycle", PropertyValue(wateringCycle));
             }
     }
 }
@@ -418,7 +443,7 @@ void loop() {
         slotCounterPerTick++;
 
         handleScriptContext();
-        publishStatusToMqtt();
+        publishStatusToMqttOneShot.handle();
 
         // Maintenance stuff
         uint8_t slot50 = 0;
@@ -445,8 +470,6 @@ void loop() {
             }
         } else if (slotCounterPerTick % maxSlots == slot50++) {
             if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
-                hwConfigModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->wateringCycle();
-                hwConfig.put("wateringCycle", PropertyValue(scripting_context()->wateringCycle()));
                 if (deep_sleep(scripting_context()->m_deepSleepSec * 1000000)) {
                     scripting_context()->m_deepSleepSec = 0;
                 }
