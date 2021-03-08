@@ -15,8 +15,8 @@ public:
     uint16_t m_dryThreshold;
     uint16_t m_wetThreshold;
     int32_t m_deepSleepSec;
-    ScriptContext(const char* script, bool wateringCycle) : 
-        PlainTextContext512{script}, 
+    ScriptContext(const char* script, bool wateringCycle) :
+        PlainTextContext512{script},
         m_pump(false),
         m_wateringCycle(wateringCycle),
         m_probe(false),
@@ -28,10 +28,11 @@ public:
 
     void currentValue(uint16_t currentValue) {
         m_currentValue = currentValue;
-        if ( m_currentValue >= m_dryThreshold) {
-            m_wateringCycle=true;
-        } else if ( m_currentValue <= m_wetThreshold) {
-            m_wateringCycle=false;
+
+        if (m_currentValue >= m_dryThreshold) {
+            m_wateringCycle = true;
+        } else if (m_currentValue <= m_wetThreshold) {
+            m_wateringCycle = false;
         }
     }
 
@@ -47,7 +48,7 @@ public:
         return m_wateringCycle;
     }
 
-    // returns true when current value is beliw wetThreshold, remember 
+    // returns true when current value is beliw wetThreshold, remember
     // the lower the value the wetter the soil
     bool isBelowWet() {
         return m_currentValue <= m_wetThreshold;
@@ -57,13 +58,13 @@ public:
     };
 
     bool pump() {
-        return m_currentValue > 1020?false:m_pump;
+        return m_currentValue > 1020 ? false : m_pump;
     }
 
     void pump(bool p) {
         m_pump = p;
     }
-        
+
     void probe(bool v) {
         m_probe = v;
     }

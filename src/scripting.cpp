@@ -19,7 +19,7 @@ extern void deep_sleep(uint32_t time);
 /*********************
  *      Variables
  *********************/
-constexpr uint8_t SCRIPT_LINE_SIZE_MAX=32;
+constexpr uint8_t SCRIPT_LINE_SIZE_MAX = 32;
 
 static ScriptContext* scriptContext{nullptr};
 static ScriptRunner<ScriptContext>* scriptRunner = nullptr;
@@ -45,21 +45,22 @@ void scripting_init() {
         Serial.flush();
         return true;
     }
-                                                        });
+                                                  });
 
     commands.push_back(new Command<ScriptContext> {"pump", [](const char* value, ScriptContext & context) {
         context.pump(getBoolValue(value, 0));
         return true;
     }
-                                                        });
+                                                  });
 
     commands.push_back(new Command<ScriptContext> {"decideAboveDry", [&](const char* value, ScriptContext & context) {
         if (!context.isAboveDry()) {
             context.jump(value);
         }
+
         return true;
     }
-                                                        });
+                                                  });
 
     commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const char* value, ScriptContext & context) {
         if (!context.isBelowWet()) {
@@ -68,33 +69,34 @@ void scripting_init() {
 
         return true;
     }
-                                                        });
-    
+                                                  });
+
     commands.push_back(new Command<ScriptContext> {"wateringCycle", [&](const char* value, ScriptContext & context) {
         if (!context.wateringCycle()) {
             context.jump(value);
         }
+
         return true;
     }
-                                                        });
+                                                  });
 
     commands.push_back(new Command<ScriptContext> {"probe", [&](const char* value, ScriptContext & context) {
         context.probe(getBoolValue(value, 0));
         return true;
     }
-                                                        });
+                                                  });
 
     commands.push_back(new Command<ScriptContext> {"sleepSec", [&](const char* value, ScriptContext & context) {
         scriptContext->m_deepSleepSec = atol(value);
         return true;
     }
-                                                        });
+                                                  });
 
     commands.push_back(new Command<ScriptContext> {"load", [&](const char* value, ScriptContext & context) {
         strncpy(scriptContextFileToLoad, value, sizeof(scriptContextFileToLoad));
         return true;
     }
-                                                        });
+                                                  });
 
     scriptRunner = new ScriptRunner<ScriptContext> {commands};
 }
@@ -134,7 +136,7 @@ int8_t scripting_handle() {
         // Note: Never run handle right after loading a script
         load_script();
         return 1;
-    } else if (scriptContext == nullptr) { 
+    } else if (scriptContext == nullptr) {
         return -1;
     } else if (scriptRunner->handle(*scriptContext, true)) {
         return 1;

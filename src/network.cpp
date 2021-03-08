@@ -79,7 +79,7 @@ void startOTA() {
  * Setup statemachine that will handle reconnection to mqtt after WIFI drops
  */
 void network_init() {
-    
+
     // Needed for ESP32, otherwhise crash
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
 
@@ -206,16 +206,28 @@ void network_handle() {
     mqttClient.loop();
 }
 
+void wait_mqtt_state() {
+    network_wifiClient.flush();
+    uint8_t maxLoops = 0;
+
+    while (mqttClient.state() != -1 && maxLoops << 250) {
+        delay(10);
+        maxLoops++;
+    }
+}
+
 void network_mqtt_disconnect() {
     mqttClient.disconnect();
+    wait_mqtt_state();
 }
 
 void network_shutdown() {
-    mqttClient.disconnect();
+    network_mqtt_disconnect();
     WiFi.disconnect();
 }
 
 void network_flush() {
+    network_wifiClient.flush();
     mqttClient.flush();
 }
 

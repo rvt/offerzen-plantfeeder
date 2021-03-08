@@ -71,7 +71,7 @@ uint32_t shouldRestart = 0;        // Indicate that a service requested an resta
 
 void publishStatusToMqtt();
 OneShot publishStatusToMqttOneShot{
-    1000,
+    5000,
     []() {
     },
     []() {
@@ -80,6 +80,23 @@ OneShot publishStatusToMqttOneShot{
     },
     []() {
         return true;
+    }
+};
+
+OneShot publishStatusToMqttFastOneShot{
+    500,
+    []() {
+        publishStatusToMqtt();
+    },
+    []() {
+        publishStatusToMqtt();
+
+        if (scripting_context()->pump()) {
+            publishStatusToMqttOneShot.reset();
+        }
+    },
+    []() {
+        return scripting_context()->pump();
     }
 };
 
@@ -100,7 +117,10 @@ bool loadConfig(const char* filename, Properties& properties, bool serial) {
                 Serial.print(F("Loading config : "));
                 Serial.println(filename);
                 deserializeProperties<LINE_BUFFER_SIZE>(configFile, properties);
-                if (serial) serializeProperties<LINE_BUFFER_SIZE>(Serial, properties);
+
+                if (serial) {
+                    serializeProperties<LINE_BUFFER_SIZE>(Serial, properties);
+                }
             }
 
             configFile.close();
@@ -131,8 +151,11 @@ bool saveConfig(const char* filename, Properties& properties, bool serial) {
             Serial.print(F("Saving config : "));
             Serial.println(filename);
             serializeProperties<LINE_BUFFER_SIZE>(configFile, properties);
-            if (serial)
-            serializeProperties<LINE_BUFFER_SIZE>(Serial, properties, false);
+
+            if (serial) {
+                serializeProperties<LINE_BUFFER_SIZE>(Serial, properties, false);
+            }
+
             ret = true;
         } else {
             Serial.print(F("Failed to write file"));
@@ -150,33 +173,34 @@ void publishStatusToMqtt();
 bool deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
         saveConfig(CONFIG_FILENAME, hwConfig, true);
-        hwConfigModified=false;
+        hwConfigModified = false;
     }
+
     if (controllerConfigModified) {
         saveConfig(CONTROLLER_CONFIG_FILENAME, controllerConfig, false);
-        controllerConfigModified=false;
+        controllerConfigModified = false;
     }
 
     if (network_is_connected()) {
-        publishStatusToMqtt();
         if (controllerConfig.get("deepSleepEnabled")) {
-            network_flush();
-            delay(10);
+            publishStatusToMqtt();
             network_shutdown();
             FileSystemFS.end();
             Serial.print("Good Night, see you in ");
-            Serial.print(time_us/1000000);
+            Serial.print(time_us / 1000000);
             Serial.println(" seconds");
             ESP.deepSleep(time_us);
         } else  {
             Serial.println("Deep sleep disabled.");
         }
+
         return true;
     } else {
         Serial.println("No network, will not sleep.");
     }
+
     return false;
- }
+}
 
 ///////////////////////////////////////////////////////////////////////////
 //  MQTT
@@ -185,10 +209,12 @@ bool deep_sleep(uint32_t time_us) {
 * Publish current status
 */
 void publishStatusToMqtt() {
-    if (scripting_context()==nullptr) return;
+    if (scripting_context() == nullptr) {
+        return;
+    }
 
     const char format[] = "pump=%i hygro=%d wet=%d dry=%d cycle=%d";
-    char buffer[sizeof(format) + 2 + 2 + 2 + 2 -1 + 8]; 
+    char buffer[sizeof(format) + 2 + 2 + 2 + 2 - 1 + 8];
 
     sprintf(buffer,
             format,
@@ -227,13 +253,13 @@ void handleCmd(const char* topic, const char* p_payload) {
         OptParser::get(payloadBuffer, [&](OptValue v) {
             if (strcmp(v.key(), "wet") == 0) {
                 hwConfig.put("wetThreshold", PV((int16_t)v));
-                hwConfigModified=true;
+                hwConfigModified = true;
             } else if (strcmp(v.key(), "dry") == 0) {
                 hwConfig.put("dryThreshold", PV((int16_t)v));
-                hwConfigModified=true;
+                hwConfigModified = true;
             } else if (strcmp(v.key(), "deepSleepEnabled") == 0) {
                 controllerConfig.put("deepSleepEnabled", PV((bool)v));
-                controllerConfigModified=true;
+                controllerConfigModified = true;
             }
         });
     }
@@ -265,7 +291,7 @@ void setupMQTTCallback() {
             return;
         }
 
-        strncpy(mqttReceiveBuffer, (char *)p_payload, LINE_BUFFER_SIZE);
+        strncpy(mqttReceiveBuffer, (char*)p_payload, LINE_BUFFER_SIZE);
         mqttReceiveBuffer[p_length] = 0;
         handleCmd(p_topic, mqttReceiveBuffer);
     });
@@ -281,6 +307,7 @@ void handleScriptContext() {
         if (scripting_context()->probe()) {
             scripting_context()->currentValue(analogRead(MOISTA_PIN));
         }
+
         scripting_context()->m_dryThreshold = (int16_t)hwConfig.get("dryThreshold");
         scripting_context()->m_wetThreshold = (int16_t)hwConfig.get("wetThreshold");
     }
@@ -294,13 +321,21 @@ void handleScriptContext() {
             Serial.println("Script ended");
             scripting_load("/default.txt");
             break;
-    
+
         case 1:
             digitalWrite(PROBEPWR_PIN, scripting_context()->probe());
             digitalWrite(PUMP_PIN, scripting_context()->pump());
-            bool wateringCycle=(bool)hwConfig.get("wateringCycle");
-            bool wateringCycleModified = wateringCycle!=scripting_context()->wateringCycle();
+
+            if (scripting_context()->pump()) {
+                publishStatusToMqttFastOneShot.start();
+            } else {
+                publishStatusToMqttFastOneShot.stop(true);
+            }
+
+            bool wateringCycle = (bool)hwConfig.get("wateringCycle");
+            bool wateringCycleModified = wateringCycle != scripting_context()->wateringCycle();
             hwConfigModified |= wateringCycleModified;
+
             if (wateringCycleModified) {
                 hwConfig.put("wateringCycle", PropertyValue(wateringCycle));
             }
@@ -313,11 +348,11 @@ void handleScriptContext() {
 ///////////////////////////////////////////////////////////////////////////
 void setupIOHardware() {
     // Pump Pin
-    pinMode(PUMP_PIN, OUTPUT);    
+    pinMode(PUMP_PIN, OUTPUT);
     digitalWrite(PUMP_PIN, false);
 
     // Power pin of probe
-    pinMode(PROBEPWR_PIN, OUTPUT);    
+    pinMode(PROBEPWR_PIN, OUTPUT);
     digitalWrite(PROBEPWR_PIN, false);
 }
 
@@ -408,13 +443,14 @@ void setDefaultConfigurations() {
     // hwConfig
     hwConfigModified |= hwConfig.putNotContains("dryThreshold", PV(800));
     hwConfigModified |= hwConfig.putNotContains("wetThreshold", PV(600));
-    hwConfigModified |= hwConfig.putNotContains("wateringCycle", PV(true));    
+    hwConfigModified |= hwConfig.putNotContains("wateringCycle", PV(true));
 }
 
 void setup() {
     // Enable serial port
     Serial.begin(115200);
     delay(500); // SOmething buggy in the ESP8266MOD
+
     while (!Serial) {
         delay(20);
     }
@@ -443,7 +479,11 @@ void loop() {
         slotCounterPerTick++;
 
         handleScriptContext();
-        publishStatusToMqttOneShot.handle();
+
+        if (scripting_context() != nullptr) {
+            publishStatusToMqttOneShot.handle();
+            publishStatusToMqttFastOneShot.handle();
+        }
 
         // Maintenance stuff
         uint8_t slot50 = 0;
@@ -469,7 +509,7 @@ void loop() {
                 ESP.restart();
             }
         } else if (slotCounterPerTick % maxSlots == slot50++) {
-            if (scripting_context()!=nullptr && scripting_context()->m_deepSleepSec!=0) {
+            if (scripting_context() != nullptr && scripting_context()->m_deepSleepSec != 0) {
                 if (deep_sleep(scripting_context()->m_deepSleepSec * 1000000)) {
                     scripting_context()->m_deepSleepSec = 0;
                 }
