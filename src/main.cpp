@@ -58,6 +58,8 @@ Properties hwConfig;
 
 bool controllerConfigModified = false;
 bool hwConfigModified = false;
+// We dont receive retained messages untill we are really only, this boolean will be true when we are
+bool mqtt_onlineRecieved = false;
 
 // CRC value of last update to MQTT
 uint16_t lastMeasurementCRC = 0;
@@ -170,6 +172,8 @@ bool saveConfig(const char* filename, Properties& properties, bool serial) {
 }
 
 void publishStatusToMqtt();
+// Return true if network was connected but deep sleep disabled
+// Returns false if network was not connected yet
 bool deep_sleep(uint32_t time_us) {
     if (hwConfigModified) {
         saveConfig(CONFIG_FILENAME, hwConfig, true);
@@ -181,9 +185,18 @@ bool deep_sleep(uint32_t time_us) {
         controllerConfigModified = false;
     }
 
-    if (network_is_connected()) {
+    if (network_is_connected() && mqtt_onlineRecieved) {
+        // Give the network some time to handle any messages
+        // Just in case we got fast connections hand handling did not proceed
+        uint8_t loopCounter=0;
+        while (loopCounter<100) {
+            network_handle();
+            delay(10);
+            loopCounter++;
+        }
         if (controllerConfig.get("deepSleepEnabled")) {
             publishStatusToMqtt();
+            network_flush();
             network_shutdown();
             FileSystemFS.end();
             Serial.print("Good Night, see you in ");
@@ -209,7 +222,7 @@ bool deep_sleep(uint32_t time_us) {
 * Publish current status
 */
 void publishStatusToMqtt() {
-    if (scripting_context() == nullptr) {
+    if (scripting_context() == nullptr || !scripting_context()->validMeasurement()) {
         return;
     }
 
@@ -220,8 +233,8 @@ void publishStatusToMqtt() {
             format,
             scripting_context()->pump(),
             scripting_context()->currentValue(),
-            scripting_context()->m_wetThreshold,
-            scripting_context()->m_dryThreshold,
+            scripting_context()->wetThreshold(),
+            scripting_context()->dryThreshold(),
             scripting_context()->wateringCycle()
            );
 
@@ -260,8 +273,17 @@ void handleCmd(const char* topic, const char* p_payload) {
             } else if (strcmp(v.key(), "deepSleepEnabled") == 0) {
                 controllerConfig.put("deepSleepEnabled", PV((bool)v));
                 controllerConfigModified = true;
-            }
+            } else if (strcmp(v.key(), "pauseForOTA") == 0) {
+                controllerConfig.put("pauseForOTA", PV((bool)v));
+                controllerConfigModified = true;
+            }        
         });
+    }
+
+    if (strstr(topicPos, "lastwill") != nullptr) {
+        if (strcmp(payloadBuffer, MQTT_LASTWILL_ONLINE) == 0) {
+            mqtt_onlineRecieved = true;
+        }
     }
 
     if (strstr(topicPos, "load") != nullptr) {
@@ -303,16 +325,22 @@ void setupMQTTCallback() {
 //  Handle script context
 ///////////////////////////////////////////////////////////////////////////
 void handleScriptContext() {
+    int8_t handle = scripting_handle();
+
     if (scripting_context() != nullptr) {
-        if (scripting_context()->probe()) {
+        if (scripting_context()->measuring()) {
             scripting_context()->currentValue(analogRead(MOISTA_PIN));
+            bool wateringCycleModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->wateringCycle();
+            if (wateringCycleModified) {
+                hwConfigModified |= wateringCycleModified;
+                hwConfig.put("wateringCycle", PropertyValue(scripting_context()->wateringCycle()));
+            }
         }
 
-        scripting_context()->m_dryThreshold = (int16_t)hwConfig.get("dryThreshold");
-        scripting_context()->m_wetThreshold = (int16_t)hwConfig.get("wetThreshold");
+        if (scripting_context()->pump()) {
+            publishStatusToMqttFastOneShot.start();
+        }
     }
-
-    int8_t handle = scripting_handle();
 
     switch (handle) {
         case 0:
@@ -325,20 +353,6 @@ void handleScriptContext() {
         case 1:
             digitalWrite(PROBEPWR_PIN, scripting_context()->probe());
             digitalWrite(PUMP_PIN, scripting_context()->pump());
-
-            if (scripting_context()->pump()) {
-                publishStatusToMqttFastOneShot.start();
-            } else {
-                publishStatusToMqttFastOneShot.stop(true);
-            }
-
-            bool wateringCycle = (bool)hwConfig.get("wateringCycle");
-            bool wateringCycleModified = wateringCycle != scripting_context()->wateringCycle();
-            hwConfigModified |= wateringCycleModified;
-
-            if (wateringCycleModified) {
-                hwConfig.put("wateringCycle", PropertyValue(wateringCycle));
-            }
     }
 }
 

@@ -208,11 +208,11 @@ void network_handle() {
 
 void wait_mqtt_state() {
     network_wifiClient.flush();
-    uint8_t maxLoops = 0;
-
-    while (mqttClient.state() != -1 && maxLoops << 250) {
+    uint8_t loopCounter = 0;
+    while (mqttClient.state() != -1 && loopCounter < 250) {
         delay(10);
-        maxLoops++;
+        loopCounter++;
+        mqttClient.loop();
     }
 }
 

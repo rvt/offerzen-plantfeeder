@@ -62,6 +62,12 @@ void scripting_init() {
     }
                                                   });
 
+    commands.push_back(new Command<ScriptContext> {"measure", [&](const char* value, ScriptContext & context) {
+        context.measuring(getBoolValue(value, 0));
+        return true;
+    }
+                                                  });
+
     commands.push_back(new Command<ScriptContext> {"decideBelowWet", [&](const char* value, ScriptContext & context) {
         if (!context.isBelowWet()) {
             context.jump(value);
@@ -118,7 +124,7 @@ void load_script() {
         Serial.print(F("Loaded : "));
         Serial.println(scriptContextFileToLoad);
         delete scriptContext;
-        scriptContext = new ScriptContext{buffer, (bool)hwConfig.get("wateringCycle")};
+        scriptContext = new ScriptContext{buffer, (bool)hwConfig.get("wateringCycle"), (int16_t)hwConfig.get("dryThreshold"), (int16_t)hwConfig.get("wetThreshold")};
     } else {
         Serial.print(F("File not found: "));
         Serial.println(scriptContextFileToLoad);

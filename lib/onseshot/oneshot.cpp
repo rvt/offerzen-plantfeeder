@@ -64,17 +64,11 @@ void OneShot::start() {
 }
 
 void OneShot::stop() {
-    stop(false);
-}
-
-void OneShot::stop(bool withEndTrigger) {
-    if (m_oneShotStatus == STARTED) {
-        triggerEnd();
-    } else {
-        m_oneShotStatus = ENDED;
-    }
+    m_oneShotStatus == ENDED;
 }
 
 void OneShot::hold() {
-    m_startTime = millis();
+    if (m_oneShotStatus == STARTED) {
+        m_startTime = millis();
+    }
 }
