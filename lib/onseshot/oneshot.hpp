@@ -17,18 +17,17 @@ private:
     bool m_lastStatus;
     OneShotStatus m_oneShotStatus;
     uint32_t m_startTime;
+    uint32_t m_lastHandleTime;
 
     // Will trigger a start
-    void triggerStart();
+    void triggerStart(uint32_t currentMillis);
     void triggerEnd();
 public:
     OneShot(const uint32_t p_delayTimeMS,
             const CallbackFunction p_startCallback,
             const CallbackFunction p_endCallback,
             const ModifiedFunction p_modified);
-    void handle();
-
-    bool lastStatus() const;
+    void handle(uint32_t currentMillis);
 
     /* Reset the oneshot, when triggered triggerStart is not called
        Reset is only effective when the state is ENDED */

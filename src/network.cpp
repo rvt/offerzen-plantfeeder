@@ -6,8 +6,16 @@
 #include <propertyutils.hpp>
 
 #include <PubSubClient.h>
+
+#if defined(ESP32)
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <ESPmDNS.h>
+#elif defined(ESP8266)
 #include <ESP8266WiFi.h>  // https://github.com/esp8266/Arduino
 #include <ESP8266mDNS.h>
+#endif
+
 #include <ArduinoOTA.h>
 
 /*********************
@@ -148,7 +156,8 @@ void network_init() {
     PUBLISHONLINE->setRunnable([]() {
         network_publishToMQTT(
             MQTT_LASTWILL_TOPIC,
-            MQTT_LASTWILL_ONLINE);
+            MQTT_LASTWILL_ONLINE,
+            true);
         return SUBSCRIBECOMMANDTOPIC;
     });
     SUBSCRIBECOMMANDTOPIC->setRunnable([]() {
@@ -178,22 +187,25 @@ void network_init() {
 /**
  * Publish a message to mqtt
  */
-void network_publishToMQTT(const char* topic, const char* payload) {
+bool network_publishToMQTT(const char* topic, const char* payload, bool retained) {
     if (!mqttClient.connected()) {
         //  Serial.println(F("MQTT not connected"));
-        return;
+        return false;
     }
 
     char buffer[LINE_BUFFER_SIZE];
     const char* mqttBaseTopic = controllerConfig.get("mqttBaseTopic");
     snprintf(buffer, sizeof(buffer), "%s/%s", mqttBaseTopic, topic);
 
-    if (!mqttClient.publish(buffer, payload, true)) {
+    if (!mqttClient.publish(buffer, payload, retained)) {
         Serial.print(F("Failed to publish : "));
         Serial.print(topic);
         Serial.print(F(" : "));
         Serial.print(payload);
+        return false;
     }
+
+    return true;
 }
 
 void network_mqtt_callback(MQTT_CALLBACK_SIGNATURE) {
@@ -228,7 +240,9 @@ void network_shutdown() {
 
 void network_flush() {
     network_wifiClient.flush();
-    mqttClient.flush();
+    #if defined(ESP8266)
+        mqttClient.flush();
+    #endif
 }
 
 bool network_is_connected() {

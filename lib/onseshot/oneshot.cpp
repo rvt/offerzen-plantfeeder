@@ -18,26 +18,23 @@ OneShot::OneShot(
     m_modified{p_modified},
     m_lastStatus{false},
     m_oneShotStatus{WAIT_TRIGGER},
-    m_startTime{millis()} {
+    m_startTime{0},
+    m_lastHandleTime{0} {
 }
 
-void OneShot::handle() {
+void OneShot::handle(uint32_t currentMillis) {
     const bool status = m_modified();
-
+    m_lastHandleTime = currentMillis;
     if (status && m_oneShotStatus == WAIT_TRIGGER) {
-        triggerStart();
-    }
-
-    const uint32_t currentMillis = millis();
-
-    if (m_oneShotStatus == STARTED && (currentMillis - m_startTime >= m_delayTimeMS)) {
+        triggerStart(currentMillis);
+    } else if (m_oneShotStatus == STARTED && (currentMillis - m_startTime >= m_delayTimeMS)) {
         triggerEnd();
     }
 }
 
-void OneShot::triggerStart() {
+void OneShot::triggerStart(uint32_t currentMillis) {
     m_oneShotStatus = STARTED;
-    m_startTime = millis();
+    m_startTime = currentMillis;
     m_startCallback();
 }
 
@@ -46,14 +43,10 @@ void OneShot::triggerEnd() {
     m_endCallback();
 }
 
-bool OneShot::lastStatus() const {
-    return m_lastStatus;
-}
-
 void OneShot::reset() {
     if (m_oneShotStatus == ENDED) {
         m_oneShotStatus = STARTED;
-        m_startTime = millis();
+        m_startTime = m_lastHandleTime;
     }
 }
 
@@ -69,6 +62,6 @@ void OneShot::stop() {
 
 void OneShot::hold() {
     if (m_oneShotStatus == STARTED) {
-        m_startTime = millis();
+        m_startTime = m_lastHandleTime;
     }
 }

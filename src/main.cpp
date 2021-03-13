@@ -226,7 +226,7 @@ void publishStatusToMqtt() {
         return;
     }
 
-    const char format[] = "pump=%i hygro=%d wet=%d dry=%d cycle=%d";
+    const char format[] = "pump=%d hygro=%d wet=%d dry=%d cycle=%d";
     char buffer[sizeof(format) + 2 + 2 + 2 + 2 - 1 + 8];
 
     sprintf(buffer,
@@ -243,8 +243,9 @@ void publishStatusToMqtt() {
     uint16_t thisCrc = crc16((uint8_t*)buffer, std::strlen(buffer));
 
     if (thisCrc != lastMeasurementCRC) {
-        network_publishToMQTT("status", buffer);
-        lastMeasurementCRC = thisCrc;
+        if (network_publishToMQTT("status", buffer, true)) {
+            lastMeasurementCRC = thisCrc;
+        }
     }
 }
 
@@ -332,7 +333,7 @@ void handleScriptContext() {
             scripting_context()->currentValue(analogRead(MOISTA_PIN));
             bool wateringCycleModified = (bool)hwConfig.get("wateringCycle") != scripting_context()->wateringCycle();
             if (wateringCycleModified) {
-                hwConfigModified |= wateringCycleModified;
+                hwConfigModified = wateringCycleModified;
                 hwConfig.put("wateringCycle", PropertyValue(scripting_context()->wateringCycle()));
             }
         }
@@ -495,8 +496,8 @@ void loop() {
         handleScriptContext();
 
         if (scripting_context() != nullptr) {
-            publishStatusToMqttOneShot.handle();
-            publishStatusToMqttFastOneShot.handle();
+            publishStatusToMqttOneShot.handle(currentMillis);
+            publishStatusToMqttFastOneShot.handle(currentMillis);
         }
 
         // Maintenance stuff
